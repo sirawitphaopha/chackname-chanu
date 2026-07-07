@@ -1,0 +1,24 @@
+# ===== ไฟล์ลับ / คีย์ (สำคัญ — เผื่อมีตอนเชื่อม Supabase) =====
+.env
+.env.local
+.env.*.local
+*.key
+secrets.*
+
+# ===== Dependencies (ถ้าอนาคตใช้ npm) =====
+node_modules/
+
+# ===== ไฟล์ระบบปฏิบัติการ =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== ไฟล์ชั่วคราว / ทดสอบ / เซิร์ฟเวอร์รันโลคอล =====
+*.log
+server*.js
+tmp/
+scratchpad/
+
+# ===== เครื่องมือ Editor =====
+.vscode/
+.idea/

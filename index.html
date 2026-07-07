@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ระบบเช็คชื่อเข้าเรียน ร.ร.ชานุมานวิทยาคม</title>
+
+<!-- เว็บแอป (PWA) — ติดตั้งลงมือถือ/คอมได้ -->
+<meta name="theme-color" content="#0d9488">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="เช็คชื่อ">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+<style>
+/* ============================================================
+   ระบบเช็คชื่อเข้าเรียน — โฉมใหม่ (รีโครงจาก Google Apps Script)
+   สี ฟอนต์ เลย์เอาต์ ออกแบบใหม่ทั้งหมดให้สะอาดตา + ใช้ง่าย
+   ============================================================ */
+:root {
+  --teal:        #0d9488;
+  --teal-dark:   #0f766e;
+  --teal-light:  #ccfbf1;
+  --bg:          #f1f5f9;
+  --card:        #ffffff;
+  --line:        #e2e8f0;
+  --text:        #1e293b;
+  --muted:       #64748b;
+
+  /* สีสถานะ — สื่อความหมายชัด: เขียว=ดี แดง=ขาด */
+  --present: #22c55e;  --present-bg: #dcfce7;
+  --absent:  #ef4444;  --absent-bg:  #fee2e2;
+  --late:    #f59e0b;  --late-bg:    #fef3c7;
+  --leave:   #3b82f6;  --leave-bg:   #dbeafe;
+  --sick:    #a855f7;  --sick-bg:    #f3e8ff;
+  --unmarked: #94a3b8; --unmarked-bg: #f1f5f9;  /* ยังไม่เช็ค = เทา */
+
+  --radius: 14px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,.12);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: 'Sarabun', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  padding-bottom: 90px;
+  font-size: 15px;
+}
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+select, input { font-family: inherit; }
+
+/* ---------- Header ---------- */
+header {
+  position: sticky; top: 0; z-index: 40;
+  background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+  color: #fff;
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 2px 10px rgba(13,148,136,.3);
+}
+header img { height: 50px; width: 50px; border-radius: 50%; background: #fff; padding: 4px; object-fit: contain; flex-shrink: 0; }
+header .title { font-family: 'Sarabun', sans-serif; font-weight: 800; line-height: 1.15; }
+header .title b { font-size: 24px; display: block; letter-spacing: .2px; }
+header .title span { font-size: 15px; opacity: .9; font-weight: 500; }
+header .header-right { margin-left: auto; text-align: right; line-height: 1.25; padding-left: 10px; white-space: nowrap; }
+header .hdr-date { font-size: 15px; font-weight: 600; opacity: .95; }
+header .hdr-clock { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+@media (max-width: 640px) {
+  header .title b { font-size: 17px; } header .title span { font-size: 11px; }
+  header .hdr-date { font-size: 11px; } header .hdr-clock { font-size: 15px; }
+  header img { height: 40px; width: 40px; }
+}
+
+/* ---------- Controls ---------- */
+.wrap { max-width: 1400px; margin: 0 auto; padding: 14px; }
+.controls {
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 14px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+}
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 12px; color: var(--muted); font-weight: 500; padding-left: 2px; }
+.field select, .field input {
+  border: 1.5px solid var(--line); border-radius: 10px; padding: 9px 12px;
+  font-size: 15px; background: #fff; color: var(--text); min-width: 90px; transition: border-color .15s;
+}
+.field select:focus, .field input:focus { outline: none; border-color: var(--teal); }
+.field.grow { flex: 1; min-width: 160px; }
+.field.grow input { width: 100%; }
+.search-wrap { position: relative; }
+.search-wrap .search-ic { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 15px; opacity: .55; pointer-events: none; }
+#searchBox { padding-left: 34px; }
+.date-label { font-size: 13px; color: var(--teal-dark); font-weight: 600; padding: 2px; }
+
+/* ---------- Legend ---------- */
+.legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 6px; }
+.legend .chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500;
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px 5px 8px;
+}
+.legend .dot { width: 14px; height: 14px; border-radius: 50%; }
+
+/* ---------- Summary ---------- */
+.summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 6px; }
+.stat {
+  background: var(--card); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 6px; text-align: center;
+  border-top: 3px solid transparent;
+}
+.stat .num { font-family: 'Sarabun', sans-serif; font-size: 22px; font-weight: 700; line-height: 1; }
+.stat .lbl { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.stat.present { border-top-color: var(--present); } .stat.present .num { color: var(--present); }
+.stat.absent  { border-top-color: var(--absent); }  .stat.absent .num  { color: var(--absent); }
+.stat.late    { border-top-color: var(--late); }    .stat.late .num    { color: var(--late); }
+.stat.leave   { border-top-color: var(--leave); }   .stat.leave .num   { color: var(--leave); }
+.stat.sick    { border-top-color: var(--sick); }    .stat.sick .num    { color: var(--sick); }
+
+.progress-wrap { margin: 12px 0; }
+.progress-head { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+.progress-bar { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--teal), var(--present)); width: 0; transition: width .3s; }
+
+/* ---------- Room title ---------- */
+.room-title {
+  position: sticky; top: 74px; z-index: 30; background: var(--bg);
+  display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; overflow-x: auto;
+  white-space: nowrap; padding: 10px 0; margin: 0 0 10px;
+  font-family: 'Sarabun', sans-serif; box-shadow: 0 6px 8px -6px rgba(0,0,0,.15);
+}
+.room-title::-webkit-scrollbar { height: 0; }
+.rt-lead   { font-weight: 800; font-size: 23px; color: var(--teal-dark); }
+.rt-room   { font-weight: 800; font-size: 25px; background: var(--teal); color: #fff; padding: 0 14px; border-radius: 10px; }
+.rt-period { font-weight: 800; font-size: 23px; color: var(--absent); }
+.rt-dot    { color: #cbd5e1; font-weight: 700; }
+.rt-info   { font-size: 16px; color: var(--muted); font-weight: 600; }
+.rt-info b { color: var(--teal-dark); }
+.rt-subj { font-weight: 800; font-size: 25px; background: #fee2e2; color: #dc2626; padding: 0 14px; border-radius: 10px; }
+@media (max-width: 640px) {
+  .rt-lead, .rt-period { font-size: 18px; } .rt-room, .rt-subj { font-size: 19px; } .rt-info { font-size: 13px; }
+}
+
+/* ---------- Grid ---------- */
+/* การ์ดปรับจำนวนคอลัมน์อัตโนมัติตามความกว้างจอ — กว้างขั้นต่ำ 160px ต่อการ์ดเสมอ ทุกขนาดจอไม่บีบ
+   (จอ ~786px ได้ 4 คอลัมน์, จอคอม ~1400px ได้ 8 คอลัมน์, มือถือได้ 2 คอลัมน์) */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+.scard {
+  background: var(--card); border-radius: 12px; box-shadow: var(--shadow); padding: 12px;
+  display: flex; align-items: center; gap: 10px; cursor: pointer; position: relative; overflow: hidden;
+  border-left: 5px solid var(--unmarked); transition: transform .1s, box-shadow .15s; min-height: 82px;
+}
+.scard:active { transform: scale(.97); }
+.scard::after {
+  content: ''; position: absolute; inset: 0; background: var(--unmarked-bg); opacity: .5; z-index: 0;
+}
+/* (เครื่องหมายถูกย้ายไปไว้ในป้ายสถานะ "✓ มา" แล้ว จึงไม่ทับชื่อ) */
+.scard > * { position: relative; z-index: 1; }
+.scard .no {
+  min-width: 34px; height: 34px; border-radius: 50%; background: var(--teal); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex-shrink: 0;
+}
+.scard .info { flex: 1; min-width: 0; }
+.scard .name { font-size: 14px; font-weight: 500; line-height: 1.3; overflow-wrap: break-word; word-break: normal;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.scard .status-badge {
+  font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; display: inline-block; margin-top: 3px; color: #fff; white-space: nowrap;
+}
+
+/* ทาสีการ์ดตามสถานะ (ตั้งผ่าน data-status) */
+.scard[data-status="unmarked"] .no { background: var(--unmarked); }
+.scard[data-status="unmarked"] .status-badge { background: var(--unmarked); }
+.scard[data-status="present"] { border-left-color: var(--present); } .scard[data-status="present"]::after { background: var(--present-bg); } .scard[data-status="present"] .status-badge { background: var(--present); }
+.scard[data-status="absent"]  { border-left-color: var(--absent); }  .scard[data-status="absent"]::after  { background: var(--absent-bg); }  .scard[data-status="absent"] .status-badge  { background: var(--absent); }
+.scard[data-status="late"]    { border-left-color: var(--late); }    .scard[data-status="late"]::after    { background: var(--late-bg); }    .scard[data-status="late"] .status-badge    { background: var(--late); }
+.scard[data-status="leave"]   { border-left-color: var(--leave); }   .scard[data-status="leave"]::after   { background: var(--leave-bg); }   .scard[data-status="leave"] .status-badge   { background: var(--leave); }
+.scard[data-status="sick"]    { border-left-color: var(--sick); }    .scard[data-status="sick"]::after    { background: var(--sick-bg); }    .scard[data-status="sick"] .status-badge    { background: var(--sick); }
+.scard.hidden { display: none; }
+
+/* ---------- Floating toolbar ---------- */
+.toolbar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 45;
+  background: rgba(255,255,255,.95); backdrop-filter: blur(8px);
+  border-top: 1px solid var(--line); padding: 10px 14px;
+  display: flex; gap: 10px; align-items: center; max-width: 1400px; margin: 0 auto;
+}
+.btn {
+  border-radius: 10px; padding: 11px 16px; font-size: 15px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px; transition: filter .15s, transform .1s;
+}
+.btn:active { transform: scale(.96); }
+.btn-primary { background: var(--teal); color: #fff; flex: 1; justify-content: center; }
+.btn-primary:hover { filter: brightness(1.05); }
+.btn-ghost { background: var(--teal-light); color: var(--teal-dark); }
+.btn-ghost.active { background: var(--present); color: #fff; }
+.autosave { font-size: 13px; color: var(--muted); font-weight: 600; white-space: nowrap; display: flex; align-items: center; }
+@media (max-width: 640px) { .autosave { display: none; } }
+.btn-icon { background: #f1f5f9; color: var(--muted); padding: 11px 13px; }
+
+/* ---------- Bottom sheet ---------- */
+.overlay {
+  position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 60; opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+.overlay.show { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 61; background: #fff;
+  border-radius: 20px 20px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+  transform: translateY(100%); transition: transform .25s cubic-bezier(.2,.8,.2,1); max-width: 480px; margin: 0 auto;
+}
+.sheet.show { transform: translateY(0); }
+.sheet .handle { width: 40px; height: 4px; background: var(--line); border-radius: 999px; margin: 0 auto 14px; }
+.sheet .sheet-name { font-family: 'Sarabun', sans-serif; font-weight: 600; font-size: 17px; text-align: center; margin-bottom: 4px; }
+.sheet .sheet-sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+.status-options { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.status-opt {
+  border-radius: 12px; padding: 14px 4px; text-align: center; font-weight: 600; font-size: 14px; color: #fff;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; transition: transform .1s;
+}
+.status-opt:active { transform: scale(.93); }
+.status-opt .ic { font-size: 20px; }
+.status-opt.present { background: var(--present); }
+.status-opt.absent  { background: var(--absent); }
+.status-opt.late    { background: var(--late); }
+.status-opt.leave   { background: var(--leave); }
+.status-opt.sick    { background: var(--sick); }
+.status-reset {
+  width: 100%; margin-top: 10px; padding: 11px; border-radius: 10px; font-size: 14px; font-weight: 500;
+  background: var(--bg); color: var(--muted); border: 1px solid var(--line);
+}
+.status-reset:active { transform: scale(.97); }
+
+/* ---------- Menu popover ---------- */
+.menu {
+  position: fixed; z-index: 61; background: #fff; border-radius: 14px; box-shadow: var(--shadow-lg);
+  padding: 6px; min-width: 200px; opacity: 0; pointer-events: none; transform: translateY(8px); transition: .18s;
+}
+.menu.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.menu button {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 11px 12px;
+  border-radius: 9px; font-size: 15px; color: var(--text);
+}
+.menu button:hover { background: var(--bg); }
+.menu .ic { width: 22px; text-align: center; }
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px); z-index: 80;
+  background: #1e293b; color: #fff; padding: 12px 20px; border-radius: 999px; font-size: 14px; font-weight: 500;
+  opacity: 0; pointer-events: none; transition: .25s; box-shadow: var(--shadow-lg); white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- Empty / loading ---------- */
+.empty { text-align: center; color: var(--muted); padding: 50px 20px; }
+.empty .big { font-size: 40px; margin-bottom: 10px; }
+
+@media (max-width: 640px) {
+  .summary { grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  .stat .num { font-size: 18px; } .stat .lbl { font-size: 10px; }
+  header .title b { font-size: 14px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .btn-primary span.long { display: none; }
+
+  /* ฟอร์มค้นหา: จัดเป็นตาราง 2 ช่องเท่าๆ กัน ให้เรียงสวยไม่เบี้ยว (ช่องค้นหายาวเต็มแถว) */
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
+  .controls .field { min-width: 0; }
+  .controls .field select, .controls .field input { min-width: 0; width: 100%; }
+  .controls .field.grow { grid-column: auto; }
+  .controls .field.grow:has(#searchBox) { grid-column: 1 / -1; }
+
+  /* แถบสีสถานะ: จัดกึ่งกลาง + คำอธิบาย "แตะการ์ด..." ลงบรรทัดเดียวกึ่งกลาง ไม่มีกรอบ */
+  .legend { justify-content: center; gap: 6px; }
+  .legend .chip { font-size: 12px; padding: 4px 10px 4px 7px; }
+  .legend .chip:last-child { flex-basis: 100%; justify-content: center; border: none; background: none; padding: 2px; margin-top: 2px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj2kznP-U3L2f5etDO-EzdRv6TFwInnBsHuiDPX-udGmeuXkdfv0SvblVovjnJYM-UBDtqxHwX_mF_OxoZbu3dyoMbD_xWCJMWx5e-59LBcAg8oo31TYn8efUzb_nl-mrIaAjfjjrwRGVyPBtQ92gwDIeiP27sgf6N1yQarvFQw8oDwvjukdH8_n0REYl0Y/s1600/images__2_-removebg-preview.png" alt="โลโก้">
+  <div class="title">
+    <b>ระบบเช็คชื่อเข้าเรียน</b>
+    <span>โรงเรียนชานุมานวิทยาคม · ปีการศึกษา 2569</span>
+  </div>
+  <div class="header-right">
+    <div class="hdr-date" id="hdrDate"></div>
+    <div class="hdr-clock" id="hdrClock">--:--:--</div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- แถบเลือก -->
+  <div class="controls">
+    <div class="field">
+      <label>ระดับชั้น</label>
+      <select id="selLevel">
+        <option value="1">ม. 1</option><option value="2">ม. 2</option><option value="3">ม. 3</option>
+        <option value="4">ม. 4</option><option value="5">ม. 5</option><option value="6">ม. 6</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>ห้อง</label>
+      <select id="selRoom"></select>
+    </div>
+    <div class="field">
+      <label>คาบเรียน</label>
+      <select id="selPeriod">
+        <option value="1">คาบ 1</option><option value="2">คาบ 2</option><option value="3">คาบ 3</option>
+        <option value="4">คาบ 4</option><option value="5">คาบ 5</option><option value="6">คาบ 6</option>
+        <option value="7">คาบ 7</option><option value="8">คาบ 8</option><option value="9">คาบ 9</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>วันที่</label>
+      <input type="date" id="selDate">
+    </div>
+    <div class="field grow">
+      <label>วิชา</label>
+      <input type="text" id="subject" placeholder="เช่น คณิตศาสตร์">
+    </div>
+    <div class="field">
+      <label>รหัสวิชา</label>
+      <input type="text" id="subjectCode" placeholder="เช่น ค21101" style="min-width:110px">
+    </div>
+    <div class="field grow">
+      <label>ค้นหานักเรียน</label>
+      <div class="search-wrap">
+        <span class="search-ic">🔍</span>
+        <input type="text" id="searchBox" placeholder="พิมพ์ชื่อ หรือเลขที่">
+      </div>
+    </div>
+  </div>
+
+  <!-- ป้ายบอกสี -->
+  <div class="legend">
+    <span class="chip"><span class="dot" style="background:var(--unmarked)"></span>ยังไม่เช็ค</span>
+    <span class="chip"><span class="dot" style="background:var(--present)"></span>มา</span>
+    <span class="chip"><span class="dot" style="background:var(--absent)"></span>ขาด</span>
+    <span class="chip"><span class="dot" style="background:var(--late)"></span>สาย</span>
+    <span class="chip"><span class="dot" style="background:var(--leave)"></span>ลา</span>
+    <span class="chip"><span class="dot" style="background:var(--sick)"></span>ป่วย</span>
+    <span class="chip" style="color:var(--muted)">แตะการ์ดเพื่อเปลี่ยนสถานะ</span>
+  </div>
+
+  <!-- สรุป -->
+  <div class="summary" id="summary">
+    <div class="stat present"><div class="num" id="cPresent">0</div><div class="lbl">มา</div></div>
+    <div class="stat absent"><div class="num" id="cAbsent">0</div><div class="lbl">ขาด</div></div>
+    <div class="stat late"><div class="num" id="cLate">0</div><div class="lbl">สาย</div></div>
+    <div class="stat leave"><div class="num" id="cLeave">0</div><div class="lbl">ลา</div></div>
+    <div class="stat sick"><div class="num" id="cSick">0</div><div class="lbl">ป่วย</div></div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-head"><span id="progText">เช็คแล้ว 0 คน</span><span id="progTotal">จากทั้งหมด 0 คน</span></div>
+    <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+  </div>
+
+  <!-- ชื่อห้อง (สำหรับแคปรูป) -->
+  <div id="capture">
+    <div class="room-title" id="roomTitle"></div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+</div>
+
+<!-- แถบเครื่องมือลอยล่าง -->
+<div class="toolbar">
+  <button class="btn btn-ghost" id="btnAllPresent" style="flex:1;justify-content:center;">⬜ มาทั้งห้อง</button>
+  <span class="autosave">💾 บันทึกอัตโนมัติ</span>
+  <button class="btn btn-icon" id="btnMore">⋯</button>
+</div>
+
+<!-- เมนูเพิ่มเติม -->
+<div class="menu" id="moreMenu">
+  <button id="mCopy"><span class="ic">📋</span> คัดลอกสรุปส่งไลน์</button>
+  <button id="mImage"><span class="ic">📷</span> บันทึกเป็นรูปภาพ</button>
+  <button id="mClear"><span class="ic">🧹</span> ล้างค่าคาบนี้</button>
+</div>
+
+<!-- แผ่นเลือกสถานะ -->
+<div class="overlay" id="overlay"></div>
+<div class="sheet" id="sheet">
+  <div class="handle"></div>
+  <div class="sheet-name" id="sheetName">-</div>
+  <div class="sheet-sub" id="sheetSub">เลือกสถานะการเข้าเรียน</div>
+  <div class="status-options">
+    <button class="status-opt present" data-set="present"><span class="ic">✅</span>มา</button>
+    <button class="status-opt absent" data-set="absent"><span class="ic">❌</span>ขาด</button>
+    <button class="status-opt late" data-set="late"><span class="ic">⏰</span>สาย</button>
+    <button class="status-opt leave" data-set="leave"><span class="ic">📝</span>ลา</button>
+    <button class="status-opt sick" data-set="sick"><span class="ic">🤒</span>ป่วย</button>
+  </div>
+  <button class="status-reset" data-set="unmarked">↩ ล้าง กลับเป็นยังไม่เช็ค</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   ค่าคงที่ของสถานะ  (คีย์ที่เก็บในฐานข้อมูล ↔ ข้อความไทย)
+   ============================================================ */
+const STATUS = {
+  unmarked:{ th: 'ยังไม่เช็ค', full: 'ยังไม่ได้เช็ค' },
+  present: { th: 'มา',   full: 'มาเรียน' },
+  absent:  { th: 'ขาด',  full: 'ขาดเรียน' },
+  late:    { th: 'สาย',  full: 'มาสาย' },
+  leave:   { th: 'ลา',   full: 'ลา' },
+  sick:    { th: 'ป่วย', full: 'ป่วย' },
+};
+const PERIOD_TIME = ['','8.30-9.20','9.20-10.10','10.20-11.10','11.10-12.00','12.00-13.00','13.00-13.50','13.50-14.40','14.40-15.30','15.30-15.45'];
+
+/* ============================================================
+   ชั้นข้อมูล (Data Service)
+   -----------------------------------------------------------
+   ตอนนี้เก็บลง localStorage ในเครื่อง
+   เมื่อพร้อมต่อ Supabase ให้แก้เฉพาะ 3 เมธอดนี้ตามคอมเมนต์
+   (โครงสร้างข้อมูลออกแบบให้เก็บ "ตรงๆ" ไม่ต้องเข้ารหัส A1B2)
+   ============================================================ */
+const DataService = {
+  _key: 'checkin_v2',
+  _all() { try { return JSON.parse(localStorage.getItem(this._key)) || {}; } catch (e) { return {}; } },
+  _write(d) { localStorage.setItem(this._key, JSON.stringify(d)); },
+
+  /* ดึงรายชื่อนักเรียนของห้อง */
+  async getStudents(level, room) {
+    const db = this._all();
+    const k = `students_${level}_${room}`;
+    if (!db[k]) { db[k] = buildMockStudents(level, room); this._write(db); }
+    return db[k];
+    // ===== SUPABASE (ยังไม่เปิดใช้) =====
+    // const { data } = await sb.from('students')
+    //   .select('number, prefix, full_name')
+    //   .eq('classroom', level).eq('room', room)
+    //   .order('number');
+    // return data.map(r => ({ number: r.number, prefix: r.prefix, fullName: r.full_name }));
+  },
+
+  /* ดึงผลการเช็คชื่อของ ห้อง+วัน+คาบ  →  { เลขที่: สถานะ } */
+  async getAttendance(level, room, dateISO, period) {
+    const db = this._all();
+    return db[`att_${level}_${room}_${dateISO}_${period}`] || {};
+    // ===== SUPABASE (ยังไม่เปิดใช้) =====
+    // const { data } = await sb.from('attendance')
+    //   .select('student_number, status')
+    //   .eq('classroom', level).eq('room', room)
+    //   .eq('date', dateISO).eq('period', period);
+    // const map = {}; data.forEach(r => map[r.student_number] = r.status); return map;
+  },
+
+  /* บันทึกผลการเช็คชื่อ */
+  async saveAttendance(level, room, dateISO, period, map) {
+    const db = this._all();
+    db[`att_${level}_${room}_${dateISO}_${period}`] = map;
+    this._write(db);
+    // ===== SUPABASE (ยังไม่เปิดใช้) =====
+    // const rows = Object.entries(map).map(([number, status]) => ({
+    //   classroom: level, room, student_number: Number(number),
+    //   date: dateISO, period, status, recorded_at: new Date().toISOString()
+    // }));
+    // await sb.from('attendance').upsert(rows, { onConflict: 'classroom,room,student_number,date,period' });
+  }
+};
+
+/* สร้างรายชื่อตัวอย่าง 40 คน (ใช้ครั้งแรกเท่านั้น — ของจริงมาจาก Supabase) */
+function buildMockStudents(level, room) {
+  const first = ['สมชาย','สมหญิง','วิชัย','มานี','ปิติ','ชูใจ','อารยา','กิตติศักดิ์','นภาพร','ธนวัฒน์',
+    'พิมพ์ชนก','ณัฐพล','ศิริพร','อนุชา','จันทิมา','รัชนก','ปรเมศวร์','วราภรณ์','ธีรเดช','สุพัตรา',
+    'กมลชนก','อภิสิทธิ์','เบญจวรรณ','ชยพล','ดวงกมล','ภาณุพงศ์','สุนิสา','วีรภัทร','ปนัดดา','กฤษณะ',
+    'ธัญญารัตน์','พงศกร','อรวรรณ','สหรัฐ','นันทิดา','จิรายุ','ศศิธร','ณภัทร','พัชราภา','ธนกร'];
+  const last = ['ใจดี','รักเรียน','ศรีสุข','พงษ์ไพร','แก้วมณี','ทองคำ','บุญมา','สายทอง','มั่นคง','ไพรวัลย์'];
+  const rows = [];
+  for (let i = 0; i < 40; i++) {
+    const isBoy = i % 2 === 0;
+    rows.push({
+      number: i + 1,
+      prefix: isBoy ? 'เด็กชาย' : 'เด็กหญิง',
+      fullName: (isBoy ? 'เด็กชาย' : 'เด็กหญิง') + first[i % first.length] + ' ' + last[i % last.length]
+    });
+  }
+  return rows;
+}
+
+/* จำวิชา/รหัสวิชา ของแต่ละ ห้อง+คาบ (ครูไม่ต้องกรอกซ้ำ) */
+function loadSubject(l, r, p) {
+  try { return JSON.parse(localStorage.getItem(`subj_${l}_${r}_${p}`)) || { name: '', code: '' }; }
+  catch (e) { return { name: '', code: '' }; }
+}
+function saveSubject(l, r, p, o) { localStorage.setItem(`subj_${l}_${r}_${p}`, JSON.stringify(o)); }
+
+/* ============================================================
+   สถานะหน้าจอ (State)
+   ============================================================ */
+const state = {
+  level: '1', room: '1', period: '1', dateISO: '',
+  students: [],
+  att: {}   // { เลขที่: สถานะ }
+};
+
+/* ============================================================
+   ฟังก์ชันวันที่ (แสดง พ.ศ.)
+   ============================================================ */
+const THAI_MONTH = ['','มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const THAI_DAY = ['วันอาทิตย์','วันจันทร์','วันอังคาร','วันพุธ','วันพฤหัสบดี','วันศุกร์','วันเสาร์'];
+function formatThaiDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  return `${THAI_DAY[d.getDay()]}ที่ ${d.getDate()} ${THAI_MONTH[d.getMonth()+1]} ${d.getFullYear()+543}`;
+}
+
+/* ============================================================
+   เรนเดอร์หน้าจอ
+   ============================================================ */
+const $ = id => document.getElementById(id);
+
+function renderRoomTitle() {
+  const subj = ($('subject') ? $('subject').value : '').trim();
+  const code = ($('subjectCode') ? $('subjectCode').value : '').trim();
+  const subjHtml = (subj || code)
+    ? `<span class="rt-dot">·</span><span class="rt-subj">${subj || 'วิชา'}${code ? ' (' + code + ')' : ''}</span>` : '';
+  $('roomTitle').innerHTML =
+    `<span class="rt-lead">เช็คชื่อห้อง</span><span class="rt-room">ม.${state.level}/${state.room}</span><span class="rt-period">คาบ ${state.period}</span>` +
+    `<span class="rt-dot">·</span><span class="rt-info">${PERIOD_TIME[state.period] || ''} น.</span>${subjHtml}`;
+}
+
+function render() {
+  renderRoomTitle();
+
+  // การ์ดนักเรียน
+  const grid = $('grid');
+  grid.innerHTML = '';
+  const q = $('searchBox').value.trim();
+  state.students.forEach(s => {
+    const st = state.att[s.number] || 'unmarked';
+    const card = document.createElement('div');
+    card.className = 'scard';
+    card.dataset.status = st;
+    card.dataset.number = s.number;
+    if (q && !(s.fullName.includes(q) || String(s.number) === q)) card.classList.add('hidden');
+    card.innerHTML = `
+      <div class="no">${s.number}</div>
+      <div class="info">
+        <div class="name">${shortName(s.fullName)}</div>
+        <span class="status-badge">${st === 'present' ? '✓ ' : ''}${STATUS[st].th}</span>
+      </div>`;
+    card.addEventListener('click', () => openSheet(s));
+    grid.appendChild(card);
+  });
+
+  renderSummary();
+  updateAllBtn();
+}
+
+/* ปุ่ม "มาทั้งห้อง" แสดงสถานะติ๊ก + สลับข้อความ */
+function updateAllBtn() {
+  const btn = $('btnAllPresent');
+  const allPresent = state.students.length > 0 && state.students.every(s => state.att[s.number] === 'present');
+  btn.classList.toggle('active', allPresent);
+  btn.innerHTML = allPresent ? '☑️ มาทั้งห้อง' : '⬜ มาทั้งห้อง';
+}
+
+/* ตัดคำนำหน้าออกเพื่อความกระชับ แต่ "ไม่ตัดชื่อ" (แก้บั๊กเดิมที่ชื่อขาด) */
+function shortName(full) {
+  return full.replace(/^(เด็กชาย|เด็กหญิง|นางสาว|นาย|ด\.ช\.|ด\.ญ\.|น\.ส\.)\s*/, '').trim() || full;
+}
+
+function renderSummary() {
+  const c = { unmarked:0, present:0, absent:0, late:0, leave:0, sick:0 };
+  state.students.forEach(s => { c[state.att[s.number] || 'unmarked']++; });
+  $('cPresent').textContent = c.present;
+  $('cAbsent').textContent  = c.absent;
+  $('cLate').textContent    = c.late;
+  $('cLeave').textContent   = c.leave;
+  $('cSick').textContent    = c.sick;
+
+  const total = state.students.length;
+  const checked = total - c.unmarked;                 // เช็คแล้ว = ทั้งหมด ลบ ยังไม่เช็ค
+  $('progText').textContent = `เช็คแล้ว ${checked} คน`;
+  $('progTotal').textContent = c.unmarked > 0 ? `เหลือยังไม่เช็ค ${c.unmarked} คน` : `ครบทั้งหมด ${total} คน ✓`;
+  $('progFill').style.width = total ? (checked/total*100)+'%' : '0';
+}
+
+/* ============================================================
+   แผ่นเลือกสถานะ (Bottom sheet)
+   ============================================================ */
+let activeStudent = null;
+function openSheet(s) {
+  activeStudent = s;
+  $('sheetName').textContent = `เลขที่ ${s.number} · ${shortName(s.fullName)}`;
+  $('sheetSub').textContent = `สถานะปัจจุบัน: ${STATUS[state.att[s.number]||'present'].full}`;
+  $('overlay').classList.add('show');
+  $('sheet').classList.add('show');
+}
+function closeSheet() {
+  $('overlay').classList.remove('show');
+  $('sheet').classList.remove('show');
+  activeStudent = null;
+}
+document.querySelectorAll('[data-set]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!activeStudent) return;
+    const set = btn.dataset.set;
+    if (set === 'unmarked') delete state.att[activeStudent.number];
+    else state.att[activeStudent.number] = set;
+    closeSheet();
+    render();
+    persist();
+  });
+});
+$('overlay').addEventListener('click', closeSheet);
+
+/* ============================================================
+   โหลดข้อมูลเมื่อเปลี่ยน ห้อง/คาบ/วัน
+   ============================================================ */
+/* บันทึกอัตโนมัติลงเครื่องทันทีที่มีการเปลี่ยนแปลง (เก็บเฉพาะคนที่เช็คแล้ว) */
+function persist() {
+  const map = {};
+  state.students.forEach(s => {
+    const st = state.att[s.number];
+    if (st && st !== 'unmarked') map[s.number] = st;
+  });
+  DataService.saveAttendance(state.level, state.room, state.dateISO, state.period, map);
+}
+
+async function reload() {
+  state.level  = $('selLevel').value;
+  state.room   = $('selRoom').value;
+  state.period = $('selPeriod').value;
+  state.dateISO = $('selDate').value;
+  $('hdrDate').textContent = formatThaiDate(state.dateISO);
+
+  const subj = loadSubject(state.level, state.room, state.period);
+  $('subject').value = subj.name;
+  $('subjectCode').value = subj.code;
+
+  state.students = await DataService.getStudents(state.level, state.room);
+  state.att = await DataService.getAttendance(state.level, state.room, state.dateISO, state.period);
+  render();
+}
+
+/* ============================================================
+   ปุ่มต่างๆ
+   ============================================================ */
+$('btnAllPresent').addEventListener('click', () => {
+  // ปุ่มสลับ (toggle) : กดครั้งแรก = ติ๊กมาทั้งห้อง / กดซ้ำ = ยกเลิกทั้งห้อง
+  const allPresent = state.students.length > 0 && state.students.every(s => state.att[s.number] === 'present');
+  if (allPresent) {
+    state.att = {};                                   // กดซ้ำ → ยกเลิกทั้งห้อง
+    render();
+    persist();
+    toast('↩ ยกเลิกทั้งห้อง กลับเป็นยังไม่เช็ค');
+  } else {
+    state.students.forEach(s => state.att[s.number] = 'present');
+    render();
+    persist();
+    toast('✅ ติ๊กมาทั้งห้องแล้ว');
+  }
+});
+
+/* (เลิกใช้ปุ่มบันทึก — เปลี่ยนเป็นบันทึกอัตโนมัติ persist() ทุกครั้งที่เปลี่ยนสถานะ) */
+
+$('mClear').addEventListener('click', () => {
+  state.att = {};
+  render();
+  persist();
+  closeMenu();
+  toast('ล้างค่าคาบนี้แล้ว');
+});
+
+$('mCopy').addEventListener('click', () => {
+  const text = buildSummaryText();
+  navigator.clipboard?.writeText(text).then(
+    () => toast('📋 คัดลอกสรุปแล้ว วางในไลน์ได้เลย'),
+    () => toast('คัดลอกไม่สำเร็จ')
+  );
+  closeMenu();
+});
+
+$('mImage').addEventListener('click', () => {
+  closeMenu();
+  toast('กำลังสร้างรูป...');
+  html2canvas($('capture'), { backgroundColor: '#f1f5f9', scale: 2 }).then(canvas => {
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `เช็คชื่อ_ม${state.level}-${state.room}_คาบ${state.period}_${state.dateISO}.png`;
+    a.click();
+    toast('📷 บันทึกรูปแล้ว');
+  });
+});
+
+function buildSummaryText() {
+  const c = { present:0, absent:0, late:0, leave:0, sick:0 };
+  const lines = [];
+  state.students.forEach(s => {
+    const st = state.att[s.number] || 'present';
+    c[st]++;
+    if (st !== 'present') lines.push(`เลขที่ ${s.number} ${shortName(s.fullName)} = ${STATUS[st].full}`);
+  });
+  const subj = $('subject').value.trim(), code = $('subjectCode').value.trim();
+  const subjLine = (subj || code) ? ` · วิชา ${subj}${code ? ' (' + code + ')' : ''}` : '';
+  let t = `📋 สรุปเช็คชื่อ ม.${state.level}/${state.room}\n${formatThaiDate(state.dateISO)}\nคาบ ${state.period}${subjLine}\n`;
+  t += `\nมา ${c.present} | ขาด ${c.absent} | สาย ${c.late} | ลา ${c.leave} | ป่วย ${c.sick}\n`;
+  if (lines.length) t += `\n— รายชื่อที่ไม่ได้มาปกติ —\n` + lines.join('\n');
+  return t;
+}
+
+/* ---------- เมนู ⋯ ---------- */
+function closeMenu() { $('moreMenu').classList.remove('show'); }
+$('btnMore').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const m = $('moreMenu');
+  const r = $('btnMore').getBoundingClientRect();
+  m.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+  m.style.right = (window.innerWidth - r.right) + 'px';
+  m.classList.toggle('show');
+});
+document.addEventListener('click', closeMenu);
+$('moreMenu').addEventListener('click', e => e.stopPropagation());
+
+/* ---------- Toast ---------- */
+let toastTimer;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ============================================================
+   เริ่มต้น
+   ============================================================ */
+function fillRooms() {
+  const sel = $('selRoom');
+  sel.innerHTML = '';
+  for (let i = 1; i <= 17; i++) sel.innerHTML += `<option value="${i}">ห้อง ${i}</option>`;
+}
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+['selLevel','selRoom','selPeriod','selDate'].forEach(id => $(id).addEventListener('change', reload));
+$('searchBox').addEventListener('input', render);
+['subject','subjectCode'].forEach(id => $(id).addEventListener('input', () => {
+  saveSubject(state.level, state.room, state.period, { name: $('subject').value, code: $('subjectCode').value });
+  renderRoomTitle();
+}));
+
+/* ตั้งระยะตรึงหัวข้อห้องให้อยู่ใต้แบนเนอร์พอดี (ปรับตามความสูงจริงของแบนเนอร์) */
+function setStickyOffset() {
+  const header = document.querySelector('header');
+  if (header) $('roomTitle').style.top = header.offsetHeight + 'px';
+}
+window.addEventListener('resize', setStickyOffset);
+
+/* นาฬิกาเรียลไทม์บนแบนเนอร์ */
+function tickClock() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  const el = $('hdrClock');
+  if (el) el.textContent = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+setInterval(tickClock, 1000);
+
+(function init() {
+  fillRooms();
+  $('selDate').value = todayISO();
+  reload();
+  setStickyOffset();
+  tickClock();
+})();
+
+/* ลงทะเบียน Service Worker (ทำงานเมื่อเปิดผ่านเว็บ/เซิร์ฟเวอร์ ไม่ทำงานตอนดับเบิลคลิกไฟล์) */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+</body>
+</html>
