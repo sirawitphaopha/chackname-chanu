@@ -76,8 +76,16 @@ header .header-right { margin-left: auto; text-align: right; line-height: 1.25; 
 header .hdr-date { font-size: 15px; font-weight: 600; opacity: .95; }
 header .hdr-clock { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
 @media (max-width: 640px) {
-  header .title b { font-size: 17px; } header .title span { font-size: 11px; }
-  header .hdr-date { font-size: 11px; } header .hdr-clock { font-size: 15px; }
+  /* header 2 แถว: ชื่อเว็บได้พื้นที่เต็มแถวบน / วันที่+นาฬิกาลงแถวล่างแนวนอนกึ่งกลาง */
+  header { flex-wrap: wrap; row-gap: 5px; }
+  header .title { flex: 1; min-width: 0; }
+  header .title b { font-size: 16px; } header .title span { font-size: 11px; }
+  header .header-right {
+    width: 100%; margin-left: 0; padding-left: 0; margin-top: 1px; padding-top: 5px;
+    display: flex; align-items: baseline; justify-content: center; gap: 10px;
+    text-align: center; border-top: 1px solid rgba(255,255,255,.22);
+  }
+  header .hdr-date { font-size: 12px; } header .hdr-clock { font-size: 16px; }
   header img { height: 40px; width: 40px; }
 }
 
@@ -94,6 +102,7 @@ header .hdr-clock { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
   font-size: 15px; background: #fff; color: var(--text); min-width: 90px; transition: border-color .15s;
 }
 .field select:focus, .field input:focus { outline: none; border-color: var(--teal); }
+.field input.field-required, .field select.field-required { border-color: var(--absent); box-shadow: 0 0 0 3px rgba(220,38,38,.18); }
 .field.grow { flex: 1; min-width: 160px; }
 .field.grow input { width: 100%; }
 .search-wrap { position: relative; }
@@ -144,7 +153,11 @@ header .hdr-clock { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
 .rt-info b { color: var(--teal-dark); }
 .rt-subj { font-weight: 800; font-size: 25px; background: #fee2e2; color: #dc2626; padding: 0 14px; border-radius: 10px; }
 @media (max-width: 640px) {
-  .rt-lead, .rt-period { font-size: 18px; } .rt-room, .rt-subj { font-size: 19px; } .rt-info { font-size: 13px; }
+  .rt-lead, .rt-period { font-size: 18px; } .rt-room { font-size: 19px; } .rt-info { font-size: 13px; }
+  /* ชื่อวิชาลงแถวที่ 2 ตัวใหญ่เด่น (เฉพาะมือถือ — เดสก์ท็อปปกติ) */
+  .room-title { flex-wrap: wrap; overflow-x: visible; white-space: normal; row-gap: 5px; }
+  .room-title .rt-dot-subj { display: none; }
+  .room-title .rt-subj { flex-basis: 100%; font-size: 22px; text-align: center; padding: 4px 14px; }
 }
 
 /* ---------- Grid ---------- */
@@ -263,7 +276,7 @@ header .hdr-clock { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
 @media (max-width: 640px) {
   .summary { grid-template-columns: repeat(5, 1fr); gap: 5px; }
   .stat .num { font-size: 18px; } .stat .lbl { font-size: 10px; }
-  header .title b { font-size: 14px; }
+  header .title b { font-size: 16px; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
   .btn-primary span.long { display: none; }
 
@@ -274,11 +287,47 @@ header .hdr-clock { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
   .controls .field.grow { grid-column: auto; }
   .controls .field.grow:has(#searchBox) { grid-column: 1 / -1; }
 
-  /* แถบสีสถานะ: จัดกึ่งกลาง + คำอธิบาย "แตะการ์ด..." ลงบรรทัดเดียวกึ่งกลาง ไม่มีกรอบ */
-  .legend { justify-content: center; gap: 6px; }
-  .legend .chip { font-size: 12px; padding: 4px 10px 4px 7px; }
-  .legend .chip:last-child { flex-basis: 100%; justify-content: center; border: none; background: none; padding: 2px; margin-top: 2px; }
+  /* ซ่อนแถบอธิบายสี (legend) บนมือถือ — สีอยู่บนการ์ดสรุป+การ์ดนักเรียนแล้ว เลื่อนถึงรายชื่อไวขึ้น (คอมยังมีเหมือนเดิม) */
+  .legend { display: none; }
 }
+/* ---------- Popup ตั้งค่าเริ่มต้น ---------- */
+.setup-overlay {
+  position: fixed; inset: 0; z-index: 100; background: rgba(15,23,42,.55);
+  display: none; align-items: center; justify-content: center; padding: 16px;
+}
+.setup-overlay.show { display: flex; }
+.setup-modal {
+  background: var(--card); border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  width: 100%; max-width: 460px; padding: 22px; position: relative;
+  max-height: 92vh; overflow-y: auto; animation: setupIn .2s ease;
+}
+@keyframes setupIn { from { transform: translateY(12px) scale(.98); opacity: 0; } to { transform: none; opacity: 1; } }
+.setup-close {
+  position: absolute; top: 12px; right: 12px; border: none; background: var(--line);
+  width: 30px; height: 30px; border-radius: 50%; font-size: 14px; cursor: pointer; color: var(--muted);
+}
+.setup-head { margin-bottom: 16px; padding-right: 30px; }
+.setup-title { font-family: 'Sarabun',sans-serif; font-weight: 800; font-size: 21px; color: var(--teal-dark); }
+.setup-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.setup-field { display: flex; flex-direction: column; gap: 4px; }
+.setup-field label { font-size: 12px; color: var(--muted); font-weight: 500; padding-left: 2px; }
+.setup-field select, .setup-field input {
+  border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 15px;
+  background: #fff; color: var(--text); font-family: inherit; width: 100%;
+}
+.setup-field select:focus, .setup-field input:focus { outline: none; border-color: var(--teal); }
+.setup-field input.field-required { border-color: var(--absent); box-shadow: 0 0 0 3px rgba(220,38,38,.18); }
+.setup-actions { display: flex; gap: 10px; margin-top: 20px; }
+.setup-skip {
+  padding: 12px 20px; border-radius: 12px; border: 1.5px solid var(--line);
+  background: #fff; color: var(--muted); font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.setup-start {
+  flex: 1; padding: 12px; border-radius: 12px; border: none;
+  background: var(--teal); color: #fff; font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.setup-start:active { transform: scale(.98); }
 </style>
 </head>
 <body>
@@ -294,6 +343,29 @@ header .hdr-clock { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
     <div class="hdr-clock" id="hdrClock">--:--:--</div>
   </div>
 </header>
+
+<!-- popup ตั้งค่าเริ่มต้น (เด้งทุกครั้งที่เข้าเว็บ กดข้ามไปกรอกที่หน้าเว็บได้) -->
+<div class="setup-overlay" id="setupOverlay">
+  <div class="setup-modal">
+    <button class="setup-close" id="setupClose" aria-label="ปิด">✕</button>
+    <div class="setup-head">
+      <div class="setup-title">ตั้งค่าการเช็คชื่อ</div>
+      <div class="setup-sub">กรอกข้อมูลให้ครบแล้วกดเริ่ม หรือกดข้ามไปกรอกเองที่หน้าเว็บ</div>
+    </div>
+    <div class="setup-grid">
+      <div class="setup-field"><label>ระดับชั้น</label><select id="suLevel"></select></div>
+      <div class="setup-field"><label>ห้อง</label><select id="suRoom"></select></div>
+      <div class="setup-field"><label>คาบเรียน</label><select id="suPeriod"></select></div>
+      <div class="setup-field"><label>วันที่</label><input type="date" id="suDate"></div>
+      <div class="setup-field"><label>วิชา</label><input type="text" id="suSubject" placeholder="เช่น คณิตศาสตร์"></div>
+      <div class="setup-field"><label>รหัสวิชา</label><input type="text" id="suCode" placeholder="เช่น ค21101"></div>
+    </div>
+    <div class="setup-actions">
+      <button class="setup-skip" id="setupSkip">ข้าม</button>
+      <button class="setup-start" id="setupStart">เริ่มเช็คชื่อ</button>
+    </div>
+  </div>
+</div>
 
 <div class="wrap">
 
@@ -374,7 +446,7 @@ header .hdr-clock { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
 
 <!-- แถบเครื่องมือลอยล่าง -->
 <div class="toolbar">
-  <button class="btn btn-ghost" id="btnAllPresent" style="flex:1;justify-content:center;">⬜ มาทั้งห้อง</button>
+  <button class="btn btn-ghost" id="btnAllPresent" style="flex:1;justify-content:center;">⬜ มาเข้าเรียนทั้งห้อง</button>
   <span class="autosave">💾 บันทึกอัตโนมัติ</span>
   <button class="btn btn-icon" id="btnMore">⋯</button>
 </div>
@@ -524,7 +596,7 @@ function renderRoomTitle() {
   const subj = ($('subject') ? $('subject').value : '').trim();
   const code = ($('subjectCode') ? $('subjectCode').value : '').trim();
   const subjHtml = (subj || code)
-    ? `<span class="rt-dot">·</span><span class="rt-subj">${subj || 'วิชา'}${code ? ' (' + code + ')' : ''}</span>` : '';
+    ? `<span class="rt-dot rt-dot-subj">·</span><span class="rt-subj">${subj || 'วิชา'}${code ? ' (' + code + ')' : ''}</span>` : '';
   $('roomTitle').innerHTML =
     `<span class="rt-lead">เช็คชื่อห้อง</span><span class="rt-room">ม.${state.level}/${state.room}</span><span class="rt-period">คาบ ${state.period}</span>` +
     `<span class="rt-dot">·</span><span class="rt-info">${PERIOD_TIME[state.period] || ''} น.</span>${subjHtml}`;
@@ -563,7 +635,7 @@ function updateAllBtn() {
   const btn = $('btnAllPresent');
   const allPresent = state.students.length > 0 && state.students.every(s => state.att[s.number] === 'present');
   btn.classList.toggle('active', allPresent);
-  btn.innerHTML = allPresent ? '☑️ มาทั้งห้อง' : '⬜ มาทั้งห้อง';
+  btn.innerHTML = allPresent ? '☑️ มาเข้าเรียนทั้งห้อง' : '⬜ มาเข้าเรียนทั้งห้อง';
 }
 
 /* ตัดคำนำหน้าออกเพื่อความกระชับ แต่ "ไม่ตัดชื่อ" (แก้บั๊กเดิมที่ชื่อขาด) */
@@ -591,7 +663,27 @@ function renderSummary() {
    แผ่นเลือกสถานะ (Bottom sheet)
    ============================================================ */
 let activeStudent = null;
+
+/* บังคับกรอกวิชา + รหัสวิชา ก่อนเช็คชื่อ (กดการ์ด / ปุ่มมาทั้งห้อง) */
+function requireSubject() {
+  const subjEl = $('subject'), codeEl = $('subjectCode');
+  const okSubj = subjEl && subjEl.value.trim() !== '';
+  const okCode = codeEl && codeEl.value.trim() !== '';
+  if (okSubj && okCode) return true;
+  [subjEl, codeEl].forEach(el => {
+    if (el && el.value.trim() === '') {
+      el.classList.add('field-required');
+      setTimeout(() => el.classList.remove('field-required'), 2500);
+    }
+  });
+  const firstEmpty = !okSubj ? subjEl : codeEl;
+  if (firstEmpty) firstEmpty.focus();
+  toast('⚠️ กรอกวิชาและรหัสวิชาก่อนเช็คชื่อ');
+  return false;
+}
+
 function openSheet(s) {
+  if (!requireSubject()) return;
   activeStudent = s;
   $('sheetName').textContent = `เลขที่ ${s.number} · ${shortName(s.fullName)}`;
   $('sheetSub').textContent = `สถานะปัจจุบัน: ${STATUS[state.att[s.number]||'present'].full}`;
@@ -649,6 +741,7 @@ async function reload() {
    ปุ่มต่างๆ
    ============================================================ */
 $('btnAllPresent').addEventListener('click', () => {
+  if (!requireSubject()) return;
   // ปุ่มสลับ (toggle) : กดครั้งแรก = ติ๊กมาทั้งห้อง / กดซ้ำ = ยกเลิกทั้งห้อง
   const allPresent = state.students.length > 0 && state.students.every(s => state.att[s.number] === 'present');
   if (allPresent) {
@@ -660,7 +753,7 @@ $('btnAllPresent').addEventListener('click', () => {
     state.students.forEach(s => state.att[s.number] = 'present');
     render();
     persist();
-    toast('✅ ติ๊กมาทั้งห้องแล้ว');
+    toast('✅ ติ๊กมาเข้าเรียนทั้งห้องแล้ว');
   }
 });
 
@@ -750,6 +843,7 @@ function todayISO() {
 ['selLevel','selRoom','selPeriod','selDate'].forEach(id => $(id).addEventListener('change', reload));
 $('searchBox').addEventListener('input', render);
 ['subject','subjectCode'].forEach(id => $(id).addEventListener('input', () => {
+  $(id).classList.remove('field-required');
   saveSubject(state.level, state.room, state.period, { name: $('subject').value, code: $('subjectCode').value });
   renderRoomTitle();
 }));
@@ -770,12 +864,57 @@ function tickClock() {
 }
 setInterval(tickClock, 1000);
 
+/* ============================================================
+   popup ตั้งค่าเริ่มต้น (เด้งทุกครั้งที่เข้าเว็บ)
+   ============================================================ */
+function openSetup() {
+  $('suLevel').innerHTML  = $('selLevel').innerHTML;
+  $('suRoom').innerHTML   = $('selRoom').innerHTML;
+  $('suPeriod').innerHTML = $('selPeriod').innerHTML;
+  $('suLevel').value  = $('selLevel').value;
+  $('suRoom').value   = $('selRoom').value;
+  $('suPeriod').value = $('selPeriod').value;
+  $('suDate').value   = $('selDate').value || todayISO();
+  $('suSubject').value = $('subject').value;
+  $('suCode').value    = $('subjectCode').value;
+  $('setupOverlay').classList.add('show');
+}
+function closeSetup() { $('setupOverlay').classList.remove('show'); }
+$('setupClose').addEventListener('click', closeSetup);
+$('setupSkip').addEventListener('click', closeSetup);
+['suSubject','suCode'].forEach(id => $(id).addEventListener('input', () => $(id).classList.remove('field-required')));
+$('setupStart').addEventListener('click', () => {
+  const s = $('suSubject'), c = $('suCode');
+  const okS = s.value.trim() !== '', okC = c.value.trim() !== '';
+  if (!okS || !okC) {                                 // บังคับกรอกวิชา+รหัส ก่อนเริ่ม
+    if (!okS) s.classList.add('field-required');
+    if (!okC) c.classList.add('field-required');
+    (!okS ? s : c).focus();
+    toast('⚠️ กรอกวิชาและรหัสวิชาก่อนเริ่ม');
+    return;
+  }
+  $('selLevel').value  = $('suLevel').value;          // ส่งค่าไปหน้าเว็บหลัก
+  $('selRoom').value   = $('suRoom').value;
+  $('selPeriod').value = $('suPeriod').value;
+  $('selDate').value   = $('suDate').value;
+  saveSubject($('suLevel').value, $('suRoom').value, $('suPeriod').value, { name: s.value.trim(), code: c.value.trim() });
+  closeSetup();
+  reload();
+  toast('✅ เริ่มเช็คชื่อ ' + s.value.trim());
+});
+
+/* เตือนก่อนรีโหลด/ปิดเว็บ เฉพาะเมื่อเช็คชื่อไปแล้ว (กันเผลอ) */
+window.addEventListener('beforeunload', (e) => {
+  if (Object.keys(state.att || {}).length > 0) { e.preventDefault(); e.returnValue = ''; }
+});
+
 (function init() {
   fillRooms();
   $('selDate').value = todayISO();
   reload();
   setStickyOffset();
   tickClock();
+  openSetup();                                        // เด้ง popup ตั้งค่าทุกครั้งที่เข้าเว็บ
 })();
 
 /* ลงทะเบียน Service Worker (ทำงานเมื่อเปิดผ่านเว็บ/เซิร์ฟเวอร์ ไม่ทำงานตอนดับเบิลคลิกไฟล์) */
